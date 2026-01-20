@@ -70,21 +70,22 @@ fn struct_decl(struct_data: &DataStruct) -> proc_macro2::TokenStream {
 fn builder_impl(name: &Ident, struct_data: &DataStruct) -> proc_macro2::TokenStream {
     let setters = get_fields(struct_data).map(|(field_name, field_type)| {
         quote! {
-            pub fn #field_name (&mut self, #field_name: #field_type) {
+            pub fn #field_name (&mut self, #field_name: #field_type) -> &mut Self {
                 let _ = self.#field_name.insert(#field_name);
+                self
             }
         }
     });
 
     let inits = get_fields(struct_data).map(|(field_name, _field_data)| {
         quote! {
-            #field_name: self.#field_name.ok_or::<Box<dyn ::std::error::Error>>
+            #field_name: self.#field_name.clone().ok_or::<Box<dyn ::std::error::Error>>
                 (("Field: ".to_owned() + stringify!(#field_name)).into())?
         }
     });
 
     let build_fn = quote! {
-        fn build(self) -> Result<#name, Box<dyn ::std::error::Error>> {
+        fn build(&mut self) -> Result<#name, Box<dyn ::std::error::Error>> {
             Ok(#name {
                 #(#inits,)*
             })
