@@ -43,6 +43,10 @@ impl<'a> UserType<'a> {
             self.0
         }
     }
+
+    pub(crate) fn is_option(&self) -> bool {
+        self.unwrap_option().is_some()
+    }
 }
 
 /// Ensures types of user fields are always accessed through `UserType`

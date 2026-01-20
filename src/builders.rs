@@ -63,10 +63,16 @@ fn builder_impl(name: &Ident, user_fields: UserFields) -> proc_macro2::TokenStre
         }
     });
 
-    let inits = user_fields.iter().map(|(field_name, _field_data)| {
-        quote! {
-            #field_name: self.#field_name.clone().ok_or::<Box<dyn ::std::error::Error>>
-                (("Field: ".to_owned() + stringify!(#field_name)).into())?
+    let inits = user_fields.iter().map(|(field_name, field_type)| {
+        if field_type.is_option() {
+            quote!(
+                #field_name: self.#field_name.clone()
+            )
+        } else {
+            quote! {
+                #field_name: self.#field_name.clone().ok_or::<Box<dyn ::std::error::Error>>
+                    (("Field: ".to_owned() + stringify!(#field_name)).into())?
+            }
         }
     });
 
