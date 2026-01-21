@@ -21,46 +21,45 @@ impl<'a> From<UserType<'a>> for &'a syn::Type {
 }
 
 impl<'a> UserType<'a> {
-    fn unwrap_generic(&self, type_name: &str) -> syn::Result<Option<Self>> {
+    fn unwrap_generic(self, type_name: &str) -> syn::Result<Option<Self>> {
         let syn::Type::Path(type_path) = self.0 else {
             return Ok(None);
         };
         let path = &type_path.path;
         let mut segments = path.segments.iter();
-        let option = match segments.find(|path_segment| path_segment.ident == type_name) {
-            Some(seg) => seg,
-            None => return Ok(None),
+        let Some(seg) = segments.find(|path_segment| path_segment.ident == type_name) else {
+            return Ok(None);
         };
 
         let syn::PathArguments::AngleBracketed(syn::AngleBracketedGenericArguments {
             args, ..
-        }) = &option.arguments
+        }) = &seg.arguments
         else {
             return Err(syn::Error::new_spanned(
                 self.0,
-                format!("{}! without angle brackets", type_name),
+                format!("{type_name}! without angle brackets"),
             ));
         };
         let Some(syn::GenericArgument::Type(output_type)) = args.first() else {
             return Err(syn::Error::new_spanned(
                 self.0,
-                format!("{}! without generic argument", type_name),
+                format!("{type_name}! without generic argument"),
             ));
         };
         Ok(Some(output_type.into()))
     }
 
     /// Accesses the inner type (if it was actually an option)
-    pub(crate) fn unwrap_option(&self) -> syn::Result<Option<Self>> {
+    pub(crate) fn unwrap_option(self) -> syn::Result<Option<Self>> {
         self.unwrap_generic("Option")
     }
 
-    pub(crate) fn unwrap_vec(&self) -> syn::Result<Option<Self>> {
+    pub(crate) fn unwrap_vec(self) -> syn::Result<Option<Self>> {
         self.unwrap_generic("Vec")
     }
 
     /// Accesses the type, whether it is Option wrapped or not.
-    pub(crate) fn expected_type(&self) -> syn::Result<&syn::Type> {
+    pub(crate) fn expected_type(self) -> syn::Result<&'a syn::Type> {
         if let Some(inner_type) = self.unwrap_option()? {
             Ok(inner_type.into())
         } else {
@@ -68,7 +67,7 @@ impl<'a> UserType<'a> {
         }
     }
 
-    pub(crate) fn is_option(&self) -> syn::Result<bool> {
+    pub(crate) fn is_option(self) -> syn::Result<bool> {
         Ok(self.unwrap_option()?.is_some())
     }
 }
