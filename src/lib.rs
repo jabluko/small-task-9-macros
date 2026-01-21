@@ -13,6 +13,8 @@ pub fn derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let syn::Data::Struct(struct_data) = &ast.data else {
         panic!("Not a struct");
     };
-    let gen = impl_derive_builder(name, (&struct_data.fields).into());
-    gen.into()
+    match (impl_derive_builder(name, (&struct_data.fields).into())) {
+        Ok(token_stream) => token_stream.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
 }

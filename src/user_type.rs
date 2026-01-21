@@ -21,50 +21,59 @@ impl<'a> From<UserType<'a>> for &'a syn::Type {
 }
 
 impl<'a> UserType<'a> {
-    fn unwrap_generic(&self, type_name: &str) -> Option<Self> {
+    fn unwrap_generic(&self, type_name: &str) -> syn::Result<Option<Self>> {
         let syn::Type::Path(type_path) = self.0 else {
-            return None;
+            return Ok(None);
         };
         let path = &type_path.path;
         let mut segments = path.segments.iter();
-        let option = &segments.find(|path_segment| path_segment.ident == type_name)?;
+        let option = match segments.find(|path_segment| path_segment.ident == type_name) {
+            Some(seg) => seg,
+            None => return Ok(None),
+        };
 
         let syn::PathArguments::AngleBracketed(syn::AngleBracketedGenericArguments {
             args, ..
         }) = &option.arguments
         else {
-            panic!("Option without angle brackets!");
+            return Err(syn::Error::new_spanned(
+                self.0,
+                format!("{}! without angle brackets", type_name),
+            ));
         };
         let Some(syn::GenericArgument::Type(output_type)) = args.first() else {
-            panic!("Option without generic argument");
+            return Err(syn::Error::new_spanned(
+                self.0,
+                format!("{}! without generic argument", type_name),
+            ));
         };
-        Some(output_type.into())
+        Ok(Some(output_type.into()))
     }
 
     /// Accesses the inner type (if it was actually an option)
-    pub(crate) fn unwrap_option(&self) -> Option<Self> {
+    pub(crate) fn unwrap_option(&self) -> syn::Result<Option<Self>> {
         self.unwrap_generic("Option")
     }
 
-    pub(crate) fn unwrap_vec(&self) -> Option<Self> {
+    pub(crate) fn unwrap_vec(&self) -> syn::Result<Option<Self>> {
         self.unwrap_generic("Vec")
     }
 
     /// Accesses the type, whether it is Option wrapped or not.
-    pub(crate) fn expected_type(&self) -> &syn::Type {
-        if let Some(inner_type) = self.unwrap_option() {
-            inner_type.into()
+    pub(crate) fn expected_type(&self) -> syn::Result<&syn::Type> {
+        if let Some(inner_type) = self.unwrap_option()? {
+            Ok(inner_type.into())
         } else {
-            self.0
+            Ok(self.0)
         }
     }
 
-    pub(crate) fn is_option(&self) -> bool {
-        self.unwrap_option().is_some()
+    pub(crate) fn is_option(&self) -> syn::Result<bool> {
+        Ok(self.unwrap_option()?.is_some())
     }
 
-    pub(crate) fn is_vec(&self) -> bool {
-        self.unwrap_vec().is_some()
+    pub(crate) fn is_vec(&self) -> syn::Result<bool> {
+        Ok(self.unwrap_vec()?.is_some())
     }
 }
 
@@ -90,12 +99,13 @@ impl<'a> UserFields<'a> {
 
     pub(crate) fn iter_attrs(
         &'a self,
-    ) -> impl Iterator<Item = (&'a syn::Ident, UserType<'a>, Attributes<'a>)> {
+    ) -> impl Iterator<Item = syn::Result<(&'a syn::Ident, UserType<'a>, Attributes<'a>)>> {
         self.0.iter().map(|field| {
             let field_name = field.ident.as_ref().expect("No name");
             let field_type = &field.ty;
+            let attrs = Attributes::from_attrs(field.attrs.iter())?;
 
-            (field_name, field_type.into(), field.attrs.iter().into())
+            Ok((field_name, field_type.into(), attrs))
         })
     }
 }
@@ -114,56 +124,63 @@ impl<'a> Attributes<'a> {
         }
     }
 
-    fn parse_each(attr: &'a syn::Attribute) -> syn::Ident {
+    fn parse_each(attr: &'a syn::Attribute) -> syn::Result<syn::Ident> {
         let syn::Meta::List(syn::MetaList { path, nested, .. }) =
             attr.parse_meta().expect("Wrong attribute")
         else {
-            panic!("Not a meta-list");
+            return Err(syn::Error::new_spanned(attr, "Not a meta-list"));
         };
 
         if path.get_ident().expect("hm") != "builder" {
-            panic!("Not a builder attribute");
+            return Err(syn::Error::new_spanned(path, "Not a builder attribute"));
         }
 
         let Some(nested_meta) = nested.first() else {
-            panic!("No name");
+            return Err(syn::Error::new_spanned(nested, "No name"));
         };
 
         let NestedMeta::Meta(parsed) = nested_meta else {
-            panic!("Unexpected literal");
+            return Err(syn::Error::new_spanned(nested_meta, "Unexpected literal"));
         };
 
         let syn::Meta::NameValue(syn::MetaNameValue { path, lit, .. }) = parsed else {
-            panic!("Not name value");
+            return Err(syn::Error::new_spanned(parsed, "Expected name-value pair"));
         };
 
         if path.get_ident().expect("Not ident") != "each" {
-            panic!("unknown attribute");
+            return Err(syn::Error::new_spanned(path, "unknown attribute, did you mean: `each`?"));
         }
 
         let syn::Lit::Str(lit_str) = lit else {
-            panic!("not a string literal");
+            return Err(syn::Error::new_spanned(lit, "Expected string literal"));
         };
 
         let token_stream = lit_str
             .value()
             .parse::<proc_macro2::TokenStream>()
-            .expect("Tokening failed");
+            .map_err(|e| syn::Error::new_spanned(lit, e))?;
 
-        syn::parse2(token_stream).expect("Parsing failed")
+        Ok(syn::parse2(token_stream)?)
     }
 }
 
-impl<'a, AttrsT: Iterator<Item = &'a syn::Attribute>> From<AttrsT> for Attributes<'a> {
-    fn from(attrs: AttrsT) -> Self {
-        let mut each_iter = attrs.map(Self::parse_each);
-        let Some(first_each) = each_iter.next() else {
-            return Attributes::default();
+impl<'a> Attributes<'a> {
+    pub(crate) fn from_attrs(attrs: impl Iterator<Item = &'a syn::Attribute>) -> syn::Result<Self> {
+        let mut each_results = attrs.map(|attr| (Self::parse_each(attr), attr));
+
+        let first_each = match each_results.next() {
+            None => return Ok(Attributes::default()),
+            Some((Err(e), _)) => return Err(e),
+            Some((Ok(ident), _)) => ident,
         };
-        if each_iter.next().is_some() {
-            panic!("Multiple each for one member");
+
+        if let Some((_, attr)) = each_results.next() {
+            return Err(syn::Error::new_spanned(
+                attr,
+                "unexpected second 'each' attribute",
+            ));
         }
 
-        Attributes::new_each(first_each)
+        Ok(Attributes::new_each(first_each))
     }
 }
