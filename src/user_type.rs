@@ -71,10 +71,6 @@ impl<'a> UserType<'a> {
     pub(crate) fn is_option(&self) -> syn::Result<bool> {
         Ok(self.unwrap_option()?.is_some())
     }
-
-    pub(crate) fn is_vec(&self) -> syn::Result<bool> {
-        Ok(self.unwrap_vec()?.is_some())
-    }
 }
 
 /// Ensures types of user fields are always accessed through `UserType`
@@ -88,15 +84,6 @@ impl<'a> From<&'a syn::Fields> for UserFields<'a> {
 }
 
 impl<'a> UserFields<'a> {
-    pub(crate) fn iter(&'a self) -> impl Iterator<Item = (&'a syn::Ident, UserType<'a>)> {
-        self.0.iter().map(|field| {
-            let field_name = field.ident.as_ref().expect("No name");
-            let field_type = &field.ty;
-
-            (field_name, field_type.into())
-        })
-    }
-
     pub(crate) fn iter_attrs(
         &'a self,
     ) -> impl Iterator<Item = syn::Result<(&'a syn::Ident, UserType<'a>, Attributes<'a>)>> {
@@ -148,7 +135,10 @@ impl<'a> Attributes<'a> {
         };
 
         if path.get_ident().expect("Not ident") != "each" {
-            return Err(syn::Error::new_spanned(path, "unknown attribute, did you mean: `each`?"));
+            return Err(syn::Error::new_spanned(
+                path,
+                "unknown attribute, did you mean: `each`?",
+            ));
         }
 
         let syn::Lit::Str(lit_str) = lit else {
@@ -160,7 +150,7 @@ impl<'a> Attributes<'a> {
             .parse::<proc_macro2::TokenStream>()
             .map_err(|e| syn::Error::new_spanned(lit, e))?;
 
-        Ok(syn::parse2(token_stream)?)
+        syn::parse2(token_stream)
     }
 }
 

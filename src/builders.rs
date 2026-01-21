@@ -37,15 +37,11 @@ pub(crate) fn impl_derive_builder(
         }
     };
 
-    //eprintln!("TOKENS: {}", user_impl);
-
-    let all = quote! {
+    Ok(quote! {
         #builder_struct
         #builder_impl
         #user_impl
-    };
-
-    Ok(all)
+    })
 }
 
 fn struct_decl(user_fields: UserFields) -> syn::Result<proc_macro2::TokenStream> {
@@ -104,20 +100,19 @@ fn builder_impl(name: &Ident, user_fields: UserFields) -> syn::Result<proc_macro
         .map(|result| {
             result.and_then(|(field_name, field_type, attrs)| {
                 let Some(ident) = &attrs.each else {
-                    return Ok(quote!{});
+                    return Ok(quote! {});
                 };
 
                 if ident == field_name {
-                    return Ok(quote!{});
+                    return Ok(quote! {});
                 }
 
                 let inner_opt = field_type.unwrap_vec()?;
-                let inner_type: &Type = inner_opt.ok_or_else(|| {
-                    syn::Error::new_spanned(
-                        <&syn::Type>::from(field_type),
-                        "Should be vec"
-                    )
-                })?.into();
+                let inner_type: &Type = inner_opt
+                    .ok_or_else(|| {
+                        syn::Error::new_spanned(<&syn::Type>::from(field_type), "Should be vec")
+                    })?
+                    .into();
 
                 Ok(quote! {
                     pub fn #ident (&mut self, #ident: #inner_type) -> &mut Self {
@@ -156,14 +151,11 @@ fn builder_impl(name: &Ident, user_fields: UserFields) -> syn::Result<proc_macro
         }
     };
 
-    let output = quote! {
+    Ok(quote! {
         impl Builder {
             #(#setters)*
             #(#single_setters)*
             #build_fn
         }
-    };
-
-    eprintln!("TOKENS: {}", output);
-    Ok(output)
+    })
 }
