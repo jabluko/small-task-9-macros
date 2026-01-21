@@ -1,5 +1,6 @@
 use std::marker::PhantomData;
 
+use proc_macro2::TokenStream;
 use syn::NestedMeta;
 
 /// Represents the type in a user struct. It maybe wrapped in an Option,
@@ -85,14 +86,19 @@ impl<'a> From<&'a syn::Fields> for UserFields<'a> {
 impl<'a> UserFields<'a> {
     pub(crate) fn iter_attrs(
         &'a self,
-    ) -> impl Iterator<Item = syn::Result<(&'a syn::Ident, UserType<'a>, Attributes<'a>)>> {
-        self.0.iter().map(|field| {
-            let field_name = field.ident.as_ref().expect("No name");
-            let field_type = &field.ty;
-            let attrs = Attributes::from_attrs(field.attrs.iter())?;
+        mut quoter: impl FnMut(&'a syn::Ident, UserType<'a>, Attributes<'a>) -> syn::Result<TokenStream>,
+    ) -> syn::Result<impl Iterator<Item = TokenStream>> {
+        self.0
+            .iter()
+            .map(|field| {
+                let field_name = field.ident.as_ref().expect("No name");
+                let field_type = &field.ty;
+                let attrs = Attributes::from_attrs(field.attrs.iter())?;
 
-            Ok((field_name, field_type.into(), attrs))
-        })
+                quoter(field_name, field_type.into(), attrs)
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map(Vec::into_iter)
     }
 }
 

@@ -3,6 +3,7 @@ use syn::DeriveInput;
 use crate::builders::impl_derive_builder;
 
 mod builders;
+pub(crate) mod quote_user;
 pub(crate) mod user_type;
 
 #[proc_macro_derive(Builder, attributes(builder))]
