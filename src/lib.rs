@@ -5,7 +5,7 @@ use crate::builders::impl_derive_builder;
 mod builders;
 pub(crate) mod user_type;
 
-#[proc_macro_derive(Builder)]
+#[proc_macro_derive(Builder, attributes(builder))]
 pub fn derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast: DeriveInput = syn::parse(input).expect("Not a derive input");
 
