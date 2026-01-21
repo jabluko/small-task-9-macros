@@ -16,11 +16,11 @@ pub(crate) fn impl_derive_builder(
             result.map(|(field_ident, _, attrs)| {
                 if attrs.each.is_some() {
                     quote! {
-                        #field_ident: Vec::new()
+                        #field_ident: ::std::vec::Vec::new()
                     }
                 } else {
                     quote! {
-                        #field_ident: None
+                        #field_ident: ::std::option::Option::None
                     }
                 }
             })
@@ -60,7 +60,7 @@ fn struct_decl(user_fields: UserFields) -> syn::Result<proc_macro2::TokenStream>
                     }
                 } else {
                     quote! {
-                        #field_ident: Option<#inner_type>
+                        #field_ident: ::std::option::Option<#inner_type>
                     }
                 })
             })
@@ -140,7 +140,7 @@ fn builder_impl(name: &Ident, user_fields: UserFields) -> syn::Result<proc_macro
                     ))
                 } else {
                     Ok(quote! {
-                        #field_name: self.#field_name.clone().ok_or::<String>
+                        #field_name: self.#field_name.clone().ok_or::<::std::string::String>
                             ("Field: ".to_owned() + stringify!(#field_name))?
                     })
                 }
@@ -149,8 +149,8 @@ fn builder_impl(name: &Ident, user_fields: UserFields) -> syn::Result<proc_macro
         .collect::<syn::Result<_>>()?;
 
     let build_fn = quote! {
-        fn build(&mut self) -> Result<#name, Box<dyn ::std::error::Error>> {
-            Ok(#name {
+        fn build(&mut self) -> ::std::result::Result<#name, ::std::boxed::Box<dyn ::std::error::Error>> {
+            ::std::result::Result::Ok(#name {
                 #(#inits,)*
             })
         }
